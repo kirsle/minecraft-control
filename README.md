@@ -35,7 +35,7 @@ minecraft-control [options] java -jar minecraft_server.jar nogui
 
 * `--help, -h, -?`: Show the full help, and exit.
 * `--version, -v`: Show the version number, and exit.
-* `--debug, -d`: Turn on debugging.
+* `--debug`: Turn on debugging.
 * `--config, -c <file>`: Use a different config file (default is `settings.ini`)
 * `--cd, -d <password>`: Change directories before executing the Minecraft server.
 
