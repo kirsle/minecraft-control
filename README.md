@@ -9,12 +9,21 @@ controlling the Minecraft server over telnet, or from an automated program
 
 It supports authentication, so the TCP server may listen on a public facing
 port and require a password to log in. Currently the supported login methods
-are plain text, or an MD5 or SHA1 hash. Plans for a challenge-response
-authentication algorithm will be added shortly.
+are plain text, or a secure challenge-response algorithm using MD5 or SHA1
+hashing, computed like for example:
 
-This project is still in early development. The authentication mechanism isn't
-very secure atm (because it's all over cleartext TCP, even with hashed
+```python
+sha1(challenge + sha1(password))
+```
+
+By default the TCP server listens on the loopback address and uses plain
+text passwords. It's recommended that you edit the `settings.ini` and use
+`md5` or `sha1` as the authentication method if you're going to run the
+server on a public-facing port (to prevent possible network sniffing for
 passwords).
+
+Set the server address to `0.0.0.0` in `settings.ini` for it to listen on
+all interfaces.
 
 # Usage
 

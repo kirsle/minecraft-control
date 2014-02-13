@@ -165,9 +165,9 @@ class MinecraftClient(object):
 
         if self.auth_method == "plain":
             response = self.password
-        elif self.auth_method == "hmac-md5":
+        elif self.auth_method == "md5":
             response = md5(self.challenge + md5(self.password))
-        elif self.auth_method == "hmac-sha1":
+        elif self.auth_method == "sha1":
             response = sha1(self.challenge + sha1(self.password))
         else:
             raise Exception("Server is using unsupported auth method: {}".format(self.auth_method))

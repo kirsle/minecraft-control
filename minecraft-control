@@ -311,7 +311,7 @@ class TcpServer(threading.Thread):
     def send_auth_method(self, sock):
         """Send the AUTH_METHOD packet to the client.
 
-        If the method is an HMAC, this also makes up a random challenge and
+        If the method is an hash, this also makes up a random challenge and
         sends it as well. No such challenge is necessary for plain text
         password logins."""
         if self.auth == "plain":
@@ -338,9 +338,9 @@ class TcpServer(threading.Thread):
             logger.error("User is attempting to auth, but they haven't been issued a challenge!")
             return False
 
-        if self.auth == "hmac-md5":
+        if self.auth == "md5":
             correct = md5(challenge + md5(self.passwd))
-        elif self.auth == "hmac-sha1":
+        elif self.auth == "sha1":
             correct = sha1(challenge + sha1(self.passwd))
         else:
             logger.error("Invalid auth method in config. Can't verify user login!")
@@ -393,7 +393,7 @@ class TcpServer(threading.Thread):
                 self.connection_list.append(sockfd)
                 self.clients[sockfd.fileno()] = dict(
                     authed    = False, # Haven't logged in yet.
-                    challenge = None,  # for HMAC auth
+                    challenge = None,  # for hashed auth
                 )
                 logger.info("Connection from {}:{} (fileno. {})".format(addr[0], addr[1], sockfd.fileno()))
 
