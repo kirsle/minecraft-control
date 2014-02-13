@@ -1,4 +1,4 @@
-# Minecraft Controller
+# Minecraft Control
 
 This is a simple Python telnet server that wraps the Minecraft server and
 forwards its input/output over a TCP connection. It allows for remotely
@@ -17,7 +17,7 @@ passwords).
 # Usage
 
 ```bash
-python minecraft-controller.py [options] java -jar minecraft_server.jar nogui
+minecraft-control [options] java -jar minecraft_server.jar nogui
 ```
 
 ## Options
@@ -121,8 +121,8 @@ Noah Petherbridge, http://www.kirsle.net/
 # LICENSE
 
 ```
-RiveScript-Python
-Copyright (C) 2013 Noah Petherbridge
+Minecraft Control
+Copyright (C) 2014 Noah Petherbridge
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
