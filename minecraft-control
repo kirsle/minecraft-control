@@ -1,0 +1,382 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+import sys
+import getopt
+import ConfigParser
+import threading
+import Queue
+import socket
+import select
+import subprocess
+import hashlib
+import time
+import logging
+
+VERSION = "1.00"
+
+# Logging stuff.
+logger    = logging.getLogger(__name__)
+handler   = logging.StreamHandler()
+handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s"))
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+
+class MinecraftControl(object):
+    def __init__(self, argv):
+        """Create a new Minecraft controller.
+
+        * argv: Command line arguments."""
+
+        # Initialize some "globals": command line options,
+        # and config file options.
+        self.settings = "settings.ini"
+        self.config   = ConfigParser.SafeConfigParser()
+
+        # Set up the threading queue.
+        self.queue            = Queue.Queue()
+        self.minecraft_server = None
+        self.server_command   = None
+        self.tcp_server       = None
+
+        # Parse the command line options.
+        self.parse_options(argv)
+
+        # Load the config file.
+        self.load_config(self.settings)
+
+
+    ###########################################################################
+    # Initialization and settings functions.                                  #
+    ###########################################################################
+
+
+    def usage(self):
+        """Print the command's usage and exit."""
+        print("Usage: minecraft-control [options] <java -jar minecraft_server.jar>")
+        sys.exit(2)
+
+
+    def help(self):
+        """Print the help document and exit."""
+        print("To do.")
+        sys.exit(0)
+
+
+    def version(self):
+        """Print the version number and exit."""
+        global VERSION
+        print("minecraft-control v{}".format(VERSION))
+        sys.exit(0)
+
+
+    def parse_options(self, argv):
+        """Parse the command line options using getopt."""
+        if len(argv) == 0:
+            self.usage()
+
+        try:
+            opts, args = getopt.getopt(argv, "hv?dc:", [
+                "help",
+                "version",
+                "debug",
+                "config=",
+                "md5=",
+                "sha1=",
+            ])
+        except getopt.GetoptError:
+            self.usage()
+
+        for opt, arg in opts:
+            if opt in ["-h", "--help", "-?"]:
+                self.help()
+            elif opt in ["-v", "--version"]:
+                self.version()
+            elif opt in ["-d", "--debug"]:
+                logger.setLevel(logging.DEBUG)
+            elif opt in ["-c", "--config"]:
+                self.settings = arg
+            elif opt == "--md5":
+                self.hash("md5", arg)
+            elif opt == "--sha1":
+                self.hash("sha1", arg)
+
+        # The ['java', '-jar', 'minecraft_server.jar'] bit.
+        self.server_command = args
+
+
+    def load_config(self, filename):
+        """Load config settings from a file."""
+        self.config.read(filename)
+
+
+    def sigint(self):
+        sys.exit(0) # TODO: more gracefully exit
+        #self.tcp_server.server.shutdown()
+
+
+    def hash(self, algo, data):
+        """Generate either an MD5 or SHA1 hash of a password."""
+        result = None
+        if algo == "md5":
+            digest = hashlib.md5()
+            digest.update(data)
+            result = digest.hexdigest()
+        elif algo == "sha1":
+            digest = hashlib.sha1()
+            digest.update(data)
+            result = digest.hexdigest()
+
+        print(result)
+        sys.exit(0)
+
+
+    ###########################################################################
+    # Main program functions.                                                 #
+    ###########################################################################
+
+
+    def start_server(self):
+        """Start the TCP admin server."""
+        self.tcp_server = TcpServer(self.config, self.queue)
+        self.tcp_server.daemon = True
+        self.tcp_server.start()
+
+
+    def start_minecraft(self):
+        """Start the Minecraft server process."""
+        self.minecraft_server = MinecraftServer(self.server_command, self.queue)
+        self.minecraft_server.daemon = True
+        self.minecraft_server.start()
+
+
+    def run(self):
+        # Wait for the thread to rejoin.
+        while True:
+            time.sleep(0.01)
+
+            # Check the queue.
+            if not self.queue.empty():
+                message = self.queue.get(False)
+                logger.debug("Got info from queue: {}".format(message))
+
+                # Handle types of queue messages.
+                command, data = message.split(":", 1)
+                if command == "STDOUT":
+                    # A message from the Minecraft server. Inform the TCP servers.
+                    self.tcp_server.send_message(data)
+                elif command == "TCPIN":
+                    # A message from a TCP connection. Send it to the Minecraft server.
+                    self.minecraft_server.send_message(data)
+                elif command == "STOP":
+                    # Shut down everything!
+                    break
+
+        # Shut down everything.
+        logger.info("Shutting down everything!")
+        self.minecraft_server.shutdown()
+        self.tcp_server.shutdown()
+
+        self.minecraft_server.join()
+        self.tcp_server.join()
+        sys.exit(0)
+
+
+################################################################################
+# Minecraft Server Classes                                                     #
+################################################################################
+
+
+class MinecraftServer(threading.Thread):
+    def __init__(self, args, queue):
+        threading.Thread.__init__(self)
+        self.args  = args
+        self.queue = queue
+        self.shutting_down = False
+
+
+    def shutdown(self):
+        """Shut down the Minecraft server."""
+        self.shutting_down = True
+
+
+    def read_stdout(self):
+        logger.debug("MinecraftServer read_stdout thread started.")
+        for line in iter(self.proc.stdout.readline, b''):
+            line = line.strip()
+            logger.info("<<< {}".format(line))
+
+            # Inform the queue.
+            self.queue.put("STDOUT:{}".format(line))
+
+        self.proc.stdout.close()
+        self.queue.put("STOP:")
+
+
+    def send_message(self, message):
+        """Send a message to the Minecraft server's standard input."""
+        self.proc.stdin.write("{}\n".format(message))
+
+
+    def run(self):
+        logger.debug("Running the Minecraft server")
+
+        logger.debug("Start command: {}".format(repr(self.args)))
+        self.proc = subprocess.Popen(self.args,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+        )
+        self.thr_stdout = threading.Thread(target=self.read_stdout)
+        self.thr_stdout.start()
+
+
+
+################################################################################
+# TCP Server Classes                                                           #
+################################################################################
+
+class TcpServer(threading.Thread):
+    def __init__(self, config, queue):
+        threading.Thread.__init__(self)
+        self.config = config
+        self.addr   = config.get("tcp-server", "address")
+        self.port   = int(config.get("tcp-server", "port"))
+        self.auth   = config.get("auth", "method")
+        self.passwd = config.get("auth", "password")
+        self.queue  = queue
+
+        # Support shutting it down.
+        self.shutting_down = False
+
+
+    def send_message(self, message):
+        logger.debug("Send message to all TCP clients: {}".format(message))
+        for sock in self.connection_list:
+            if sock == self.server:
+                continue
+
+            fileno = sock.fileno()
+
+            # If the user has authenticated, forward this message.
+            if self.clients[fileno]["authed"]:
+                sock.send("{}\n".format(message))
+
+
+    def shutdown(self):
+        """Signal the TCP server to shut itself down."""
+        self.shutting_down = True
+
+
+    def test_password(self, test):
+        """Test the authentication password."""
+        # Auth methods.
+        return test == self.passwd
+
+
+    def run(self):
+        logger.debug("Running TCP server")
+
+        # List to keep track of clients.
+        self.connection_list = []
+        self.clients = dict() # Information per connected user, i.e. whether auth'd or not.
+        self.recv_buffer = 4096
+
+        # Initialize the server socket.
+        address = (self.addr, self.port)
+        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server.bind(address)
+        self.server.listen(5)
+
+        # Add server socket to the list of readable connections.
+        self.connection_list.append(self.server)
+        logger.info("TCP Admin interface running at {}:{}".format(self.addr, self.port))
+
+        while self.do_one_loop():
+            time.sleep(0.01)
+            continue
+
+        self.server.close()
+
+
+    def do_one_loop(self):
+        # Shutting down?
+        if self.shutting_down == True:
+            logger.debug("TCP server sees the signal to shut down.")
+            return False
+
+        # Get the list of sockets that are ready to be read through select.
+        read_sockets, write_sockets, error_sockets = \
+            select.select(self.connection_list, [], [], 1)
+
+        for sock in read_sockets:
+            # New connection?
+            if sock == self.server:
+                # Handle the new connection.
+                sockfd, addr = self.server.accept()
+                self.connection_list.append(sockfd)
+                self.clients[sockfd.fileno()] = dict(
+                    authed = False, # Haven't logged in yet.
+                )
+                logger.info("Connection from {}:{} (fileno. {})".format(addr[0], addr[1], sockfd.fileno()))
+
+                # Send them the auth information.
+                sockfd.send("AUTH_METHOD {}\n".format(self.auth))
+
+            # Data coming from a connected client.
+            else:
+                try:
+                    fileno = sock.fileno() # Get their unique ID.
+                    data = sock.recv(self.recv_buffer)
+                    if data == "":
+                        # They disconnected.
+                        logger.info("Client {} disconnected!".format(fileno))
+                        sock.close()
+                        self.connection_list.remove(sock)
+                        continue
+
+                    data = data.strip()
+                    logger.debug("Received from TCP: {}".format(data))
+
+                    # Are they logged in?
+                    if self.clients[fileno]["authed"] == False:
+                        # At this point they can only send the "AUTH <password>" command.
+                        if not " " in data:
+                            data += " "
+                        command, data = data.split(" ", 1)
+                        if command == "AUTH":
+                            # Compare the password.
+                            if self.test_password(data):
+                                logger.info("Authentication successful for {}".format(fileno))
+                                self.clients[fileno]["authed"] = True
+                                sock.send("AUTH_OK\n")
+                            else:
+                                logger.error("Failed log in from {}".format(fileno))
+                                sock.send("AUTH_ERROR\n")
+                        else:
+                            sock.send("UNKNOWN_COMMAND\n")
+                    else:
+                        # They're logged in, forward their command to the Minecraft server.
+                        logger.info("{} >>> {}".format(fileno, data))
+                        self.queue.put("TCPIN:{}".format(data))
+                except:
+                    # Disconnected!
+                    logger.info("Client {} disconnected!".format(sock.fileno()))
+                    sock.close()
+                    self.connection_list.remove(sock)
+                    continue
+
+        return True
+
+
+if __name__ == "__main__":
+    controller = MinecraftControl(sys.argv[1:])
+
+    import signal
+    def signal_handler(signal, frame):
+        controller.sigint()
+    signal.signal(signal.SIGINT, signal_handler)
+
+    controller.start_server()
+    controller.start_minecraft()
+    controller.run()
