@@ -31,6 +31,14 @@ all interfaces.
 minecraft-control [options] java -jar minecraft_server.jar nogui
 ```
 
+This is also confirmed to work under Windows, either with the .jar file or
+the .exe file. For example (assuming you already have python.exe and java.exe
+in your `%Path%`):
+
+```
+python minecraft-control minecraft_server.1.7.4.exe nogui
+```
+
 ## Options
 
 * `--help, -h, -?`: Show the full help, and exit.
