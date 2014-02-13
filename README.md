@@ -37,8 +37,7 @@ minecraft-control [options] java -jar minecraft_server.jar nogui
 * `--version, -v`: Show the version number, and exit.
 * `--debug, -d`: Turn on debugging.
 * `--config, -c <file>`: Use a different config file (default is `settings.ini`)
-* `--md5 <password>`: Generate the MD5 hash of a password, and exit.
-* `--sha1 <password>`: Generate the SHA1 hash of a password, and exit.
+* `--cd, -d <password>`: Change directories before executing the Minecraft server.
 
 After the command line options, enter the normal command you run to start the
 Minecraft server, e.g. `java -jar minecraft_server.jar nogui`. This is the
