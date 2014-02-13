@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
+import os
 import sys
 import getopt
 import ConfigParser
@@ -11,6 +12,7 @@ import select
 import subprocess
 import hashlib
 import time
+import uuid
 import logging
 
 VERSION = "1.00"
@@ -22,6 +24,18 @@ handler.setFormatter(logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s
 logger.setLevel(logging.INFO)
 logger.addHandler(handler)
 
+# Quick methods for making MD5 or SHA1 hashes.
+def md5(message):
+    h = hashlib.md5()
+    h.update(message)
+    return h.hexdigest()
+
+def sha1(message):
+    h = hashlib.sha1()
+    h.update(message)
+    return h.hexdigest()
+
+
 class MinecraftControl(object):
     def __init__(self, argv):
         """Create a new Minecraft controller.
@@ -32,6 +46,7 @@ class MinecraftControl(object):
         # and config file options.
         self.settings = "settings.ini"
         self.config   = ConfigParser.SafeConfigParser()
+        self.chdir    = None
 
         # Set up the threading queue.
         self.queue            = Queue.Queue()
@@ -44,6 +59,10 @@ class MinecraftControl(object):
 
         # Load the config file.
         self.load_config(self.settings)
+
+        # Change directory before continuing?
+        if self.chdir is not None:
+            os.chdir(self.chdir)
 
 
     ###########################################################################
@@ -76,13 +95,12 @@ class MinecraftControl(object):
             self.usage()
 
         try:
-            opts, args = getopt.getopt(argv, "hv?dc:", [
+            opts, args = getopt.getopt(argv, "hv?d:c:", [
                 "help",
                 "version",
                 "debug",
+                "cd=",
                 "config=",
-                "md5=",
-                "sha1=",
             ])
         except getopt.GetoptError:
             self.usage()
@@ -92,14 +110,12 @@ class MinecraftControl(object):
                 self.help()
             elif opt in ["-v", "--version"]:
                 self.version()
-            elif opt in ["-d", "--debug"]:
+            elif opt == "--debug":
                 logger.setLevel(logging.DEBUG)
+            elif opt in ["-d", "--cd"]:
+                self.chdir = arg
             elif opt in ["-c", "--config"]:
                 self.settings = arg
-            elif opt == "--md5":
-                self.hash("md5", arg)
-            elif opt == "--sha1":
-                self.hash("sha1", arg)
 
         # The ['java', '-jar', 'minecraft_server.jar'] bit.
         self.server_command = args
@@ -111,24 +127,7 @@ class MinecraftControl(object):
 
 
     def sigint(self):
-        sys.exit(0) # TODO: more gracefully exit
-        #self.tcp_server.server.shutdown()
-
-
-    def hash(self, algo, data):
-        """Generate either an MD5 or SHA1 hash of a password."""
-        result = None
-        if algo == "md5":
-            digest = hashlib.md5()
-            digest.update(data)
-            result = digest.hexdigest()
-        elif algo == "sha1":
-            digest = hashlib.sha1()
-            digest.update(data)
-            result = digest.hexdigest()
-
-        print(result)
-        sys.exit(0)
+        self.shutdown()
 
 
     ###########################################################################
@@ -173,6 +172,10 @@ class MinecraftControl(object):
                     break
 
         # Shut down everything.
+        self.shutdown()
+
+    def shutdown(self):
+        """Shut down everything."""
         logger.info("Shutting down everything!")
         self.minecraft_server.shutdown()
         self.tcp_server.shutdown()
@@ -198,6 +201,10 @@ class MinecraftServer(threading.Thread):
     def shutdown(self):
         """Shut down the Minecraft server."""
         self.shutting_down = True
+        try:
+            self.send_message("stop")
+        except:
+            pass
 
 
     def read_stdout(self):
@@ -267,10 +274,45 @@ class TcpServer(threading.Thread):
         self.shutting_down = True
 
 
-    def test_password(self, test):
+    def send_auth_method(self, sock):
+        """Send the AUTH_METHOD packet to the client.
+
+        If the method is an HMAC, this also makes up a random challenge and
+        sends it as well. No such challenge is necessary for plain text
+        password logins."""
+        if self.auth == "plain":
+            sock.send("AUTH_METHOD plain\n")
+            return
+
+        # Generate a random challenge.
+        challenge = str(uuid.uuid4())
+        self.clients[sock.fileno()]["challenge"] = challenge
+        logger.debug("Generated challenge for user: {}".format(challenge))
+        sock.send("AUTH_METHOD {} {}\n".format(self.auth, challenge))
+
+
+    def test_password(self, fileno, test):
         """Test the authentication password."""
-        # Auth methods.
-        return test == self.passwd
+        # Plain text auth is simplest.
+        if self.auth == "plain":
+            return test == self.passwd
+
+        # Generate the challenge response on our end.
+        correct   = None
+        challenge = self.clients[fileno]["challenge"]
+        if not challenge:
+            logger.error("User is attempting to auth, but they haven't been issued a challenge!")
+            return False
+
+        if self.auth == "hmac-md5":
+            correct = md5(challenge + md5(self.passwd))
+        elif self.auth == "hmac-sha1":
+            correct = sha1(challenge + sha1(self.passwd))
+        else:
+            logger.error("Invalid auth method in config. Can't verify user login!")
+            return False
+
+        return test == correct
 
 
     def run(self):
@@ -316,12 +358,13 @@ class TcpServer(threading.Thread):
                 sockfd, addr = self.server.accept()
                 self.connection_list.append(sockfd)
                 self.clients[sockfd.fileno()] = dict(
-                    authed = False, # Haven't logged in yet.
+                    authed    = False, # Haven't logged in yet.
+                    challenge = None,  # for HMAC auth
                 )
                 logger.info("Connection from {}:{} (fileno. {})".format(addr[0], addr[1], sockfd.fileno()))
 
                 # Send them the auth information.
-                sockfd.send("AUTH_METHOD {}\n".format(self.auth))
+                self.send_auth_method(sockfd)
 
             # Data coming from a connected client.
             else:
@@ -346,7 +389,7 @@ class TcpServer(threading.Thread):
                         command, data = data.split(" ", 1)
                         if command == "AUTH":
                             # Compare the password.
-                            if self.test_password(data):
+                            if self.test_password(fileno, data):
                                 logger.info("Authentication successful for {}".format(fileno))
                                 self.clients[fileno]["authed"] = True
                                 sock.send("AUTH_OK\n")
