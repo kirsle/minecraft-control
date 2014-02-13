@@ -1,5 +1,7 @@
 # Minecraft Control
 
+![02-rivescript.py](https://raw.github.com/kirsle/minecraft-control/master/eg/python/screenshots/02-rivescript.png)
+
 This is a simple Python telnet server that wraps the Minecraft server and
 forwards its input/output over a TCP connection. It allows for remotely
 controlling the Minecraft server over telnet, or from an automated program
@@ -45,6 +47,13 @@ the comments in `settings.ini` for usage information.
 **Note:** authentication isn't very secure at the moment, so I recommend at
 the time that you do NOT have this listen on a public facing port. A more
 secure challenge/response auth mechanism will be added in the near future.
+
+# Client Library and Examples
+
+There's a Python client library called `mcclient.py` located in the
+[eg/python](https://github.com/kirsle/minecraft-control/tree/master/eg/python)
+directory, and a couple of example scripts that use the client module to do
+some neat things.
 
 # Remote Controlling Minecraft
 

@@ -78,7 +78,41 @@ class MinecraftControl(object):
 
     def help(self):
         """Print the help document and exit."""
-        print("To do.")
+        print("""NAME
+
+    minecraft-control - A telnet remote controller for Minecraft.
+
+USAGE
+
+    minecraft-control [options] <java -jar minecraft_server.jar>
+
+OPTIONS
+
+    --help, -h, -?
+        Show this documentation.
+
+    --version, -v
+        Show the version number and exit.
+
+    --debug, -d
+        Turn on verbose debugging.
+
+    --config, -c <file>
+        Use a different config file instead of ./settings.ini
+
+    --cd, -d <directory>
+        Change the working directory prior to executing the Minecraft server
+        (this keeps the minecraft-control directory free of clutter).
+
+AUTHOR
+
+    Noah Petherbridge, http://www.kirsle.net/
+
+LICENSE
+
+    Released under the GNU General Public License v2.0.
+    See LICENSE for details.
+""")
         sys.exit(0)
 
 

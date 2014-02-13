@@ -10,9 +10,25 @@ The module `mcclient.py` provides a client interface to connect to the
 `minecraft-control` server, and it's what all these examples use. See its
 documentation for usage information, or just look at the examples!
 
+```python
+from mcclient import MinecraftClient
+
+client = MinecraftClient("localhost", 2001, "secret")
+
+# Provide functions to handle events.
+client.add_handler("auth_ok", on_auth_ok)
+client.add_handler("auth_error", on_auth_error)
+client.add_handler("server_message", on_message)
+
+client.connect()
+client.start()
+```
+
 # Examples
 
 ## 01-gamemode.py
+
+![01-gamemode.py](https://raw.github.com/kirsle/minecraft-control/master/eg/python/screenshots/02-gamemode.png)
 
 This implements a white list of players that are allowed to use "game mode
 commands" to toggle their game mode, *without* needing to be the server
@@ -26,6 +42,8 @@ python 01-gamemode.py localhost 2001 secret notch dinnerbone
 ```
 
 ## 02-rivescript.py
+
+![02-rivescript.py](https://raw.github.com/kirsle/minecraft-control/master/eg/python/screenshots/02-rivescript.png)
 
 This implements a [RiveScript](http://www.rivescript.com/) chatbot as a
 Minecraft "player". It uses the `/tellraw` command to send messages that
