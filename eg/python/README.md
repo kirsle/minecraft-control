@@ -28,7 +28,7 @@ client.start()
 
 ## 01-gamemode.py
 
-![01-gamemode.py](https://raw.github.com/kirsle/minecraft-control/master/eg/python/screenshots/02-gamemode.png)
+![01-gamemode.py](https://raw.github.com/kirsle/minecraft-control/master/eg/python/screenshots/01-gamemode.png)
 
 This implements a white list of players that are allowed to use "game mode
 commands" to toggle their game mode, *without* needing to be the server
@@ -40,6 +40,11 @@ to whitelist notch and dinnerbone:
 ```
 python 01-gamemode.py localhost 2001 secret notch dinnerbone
 ```
+
+In-game, players can send a message consisting of `!creative` or
+`!survival` to switch their game modes respectively. Only users who
+appear in the whitelist can do this; other users will be told they're
+not allowed.
 
 ## 02-rivescript.py
 

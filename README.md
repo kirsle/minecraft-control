@@ -52,10 +52,6 @@ server will listen on. By default it only listens on the loopback device
 The `[auth]` section is where you set up the authentication password. Read
 the comments in `settings.ini` for usage information.
 
-**Note:** authentication isn't very secure at the moment, so I recommend at
-the time that you do NOT have this listen on a public facing port. A more
-secure challenge/response auth mechanism will be added in the near future.
-
 # Client Library and Examples
 
 There's a Python client library called `mcclient.py` located in the
@@ -108,10 +104,13 @@ The authentication phase supports these commands:
 
 **From the Server:**
 
-* `AUTH_METHOD <method>`
+* `AUTH_METHOD <method> [challenge]`
 
 The server sends this to newly connected clients. It is the value of the auth
 method from `settings.ini` to inform the client as to how they should proceed.
+
+If the auth method is not `plain`, then a random challenge is sent in this
+message as well, to be used with the challenge-response authentication.
 
 * `AUTH_OK`, `AUTH_ERROR`
 
