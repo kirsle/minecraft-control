@@ -307,7 +307,7 @@ class TcpServer(threading.Thread):
 
             # If the user has authenticated, forward this message.
             if self.clients[fileno]["authed"]:
-                sock.send("{}\n".format(message))
+                sock.send("{}\n".format(message).encode("utf-8"))
 
 
     def shutdown(self):
@@ -322,14 +322,14 @@ class TcpServer(threading.Thread):
         sends it as well. No such challenge is necessary for plain text
         password logins."""
         if self.auth == "plain":
-            sock.send("AUTH_METHOD plain\n")
+            sock.send("AUTH_METHOD plain\n".encode("utf-8"))
             return
 
         # Generate a random challenge.
         challenge = str(uuid.uuid4())
         self.clients[sock.fileno()]["challenge"] = challenge
         logger.debug("Generated challenge for user: {}".format(challenge))
-        sock.send("AUTH_METHOD {} {}\n".format(self.auth, challenge))
+        sock.send("AUTH_METHOD {} {}\n".format(self.auth, challenge).encode("utf-8"))
 
 
     def test_password(self, fileno, test):
@@ -411,7 +411,7 @@ class TcpServer(threading.Thread):
             else:
                 try:
                     fileno = sock.fileno() # Get their unique ID.
-                    data = sock.recv(self.recv_buffer)
+                    data = str(sock.recv(self.recv_buffer).decode("utf-8"))
                     if data == "":
                         # They disconnected.
                         logger.info("Client {} disconnected!".format(fileno))
@@ -433,12 +433,12 @@ class TcpServer(threading.Thread):
                             if self.test_password(fileno, data):
                                 logger.info("Authentication successful for {}".format(fileno))
                                 self.clients[fileno]["authed"] = True
-                                sock.send("AUTH_OK\n")
+                                sock.send("AUTH_OK\n".encode("utf-8"))
                             else:
                                 logger.error("Failed log in from {}".format(fileno))
-                                sock.send("AUTH_ERROR\n")
+                                sock.send("AUTH_ERROR\n".encode("utf-8"))
                         else:
-                            sock.send("UNKNOWN_COMMAND\n")
+                            sock.send("UNKNOWN_COMMAND\n".encode("utf-8"))
                     else:
                         # They're logged in, forward their command to the Minecraft server.
                         logger.info("{} >>> {}".format(fileno, data))
