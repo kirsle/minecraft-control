@@ -52,7 +52,7 @@ class MinecraftControl(object):
         # Initialize some "globals": command line options,
         # and config file options.
         self.settings = "settings.ini"
-        self.config   = configparser.SafeConfigParser()
+        self.config   = configparser.ConfigParser()
         self.chdir    = None
 
         # Set up the threading queue.
