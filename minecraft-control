@@ -4,9 +4,7 @@ from __future__ import print_function
 import os
 import sys
 import getopt
-import ConfigParser
 import threading
-import Queue
 import socket
 import select
 import subprocess
@@ -14,6 +12,15 @@ import hashlib
 import time
 import uuid
 import logging
+
+try:
+    import ConfigParser as configparser
+    import Queue as queue
+except ImportError:
+    # ImportErrors indicate we're running under Python 3 and should import
+    # modules with their Python 3 names.
+    import configparser
+    import queue
 
 VERSION = "1.00"
 
@@ -45,11 +52,11 @@ class MinecraftControl(object):
         # Initialize some "globals": command line options,
         # and config file options.
         self.settings = "settings.ini"
-        self.config   = ConfigParser.SafeConfigParser()
+        self.config   = configparser.SafeConfigParser()
         self.chdir    = None
 
         # Set up the threading queue.
-        self.queue            = Queue.Queue()
+        self.queue            = queue.Queue()
         self.minecraft_server = None
         self.server_command   = None
         self.tcp_server       = None
