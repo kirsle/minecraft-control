@@ -91,7 +91,7 @@ class MinecraftClient(object):
 
     def do_one_loop(self):
         """Perform a single event loop with the server."""
-        data = self.sock.recv(4192)
+        data = str(self.sock.recv(4192).decode("utf-8"))
         if data == "":
             self.say("The server has gone away!")
             self.sock.close()
@@ -150,13 +150,13 @@ class MinecraftClient(object):
     def sendline(self, line):
         """Send a line of text to the server, with an implied line feed ending."""
         self.say(">>> {}".format(line))
-        self.sock.send("{}\n".format(line))
+        self.sock.send("{}\n".format(line).encode("utf-8"))
 
 
     def send(self, text):
         """Send a raw message to the server. No line ending is added."""
         self.say(">>> {}".format(text))
-        self.sock.send(text)
+        self.sock.send(text.encode("utf-8"))
 
 
     def _send_auth(self):
