@@ -26,10 +26,10 @@ whitelist = []
 if sys.argv[1] == "--debug":
     debug = True
     host, port, password = sys.argv[2:5]
-    whitelist = map(lambda x: x.lower(), sys.argv[5:])
+    whitelist = [x.lower() for x in sys.argv[5:]]
 else:
     host, port, password = sys.argv[1:4]
-    whitelist = map(lambda x: x.lower(), sys.argv[4:])
+    whitelist = [x.lower() for x in sys.argv[4:]]
 
 # Connect to the server.
 client = MinecraftClient(
